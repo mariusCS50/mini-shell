@@ -23,8 +23,7 @@
  */
 static bool shell_cd(word_t *dir)
 {
-	DIE(dir == NULL || dir->string == NULL, "No path specified");
-	return chdir(dir);
+	//return chdir(dir);
 }
 
 /**
@@ -42,11 +41,14 @@ static int shell_exit(void)
 static int parse_simple(simple_command_t *s, int level, command_t *father)
 {
 	/* TODO: Sanity checks. */
-	DIE(s == NULL, "No command found");
+	DIE(s == NULL || s->up == NULL, "Invalid command format");
 
 
 	/* TODO: If builtin command, execute the command. */
-	if (strcmp(s->verb->string, "exit") == 0) {
+	if (strcmp(s->verb->string, "cd") == 0) {
+		return shell_cd(s->params);
+	} else if (strcmp(s->verb->string, "exit") == 0 ||
+			   strcmp(s->verb->string, "quit") == 0) {
 		return shell_exit();
 	}
 
@@ -69,7 +71,10 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	if (pid == 0) {
 		int size = 0;
 		char **args = get_argv(s, &size);
-		execvp(args[0], args);
+		printf("%s - %d\n", s->out->string, s->out->io_flag);
+		printf("%s - %d\n", s->out->next_word->string, s->out->next_word->io_flag);
+		//int ret = execvp(args[0], args);
+		//DIE(ret == -1, "execvp() error");
 	} else {
 		pid_t wait_ret = waitpid(pid, &status, 0);
     	DIE(wait_ret < 0, "Fail waitpid");
