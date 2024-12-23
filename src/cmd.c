@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <pwd.h>
 
 #include "cmd.h"
 #include "utils.h"
@@ -18,9 +23,8 @@
  */
 static bool shell_cd(word_t *dir)
 {
-	/* TODO: Execute cd. */
-
-	return 0;
+	DIE(dir == NULL || dir->string == NULL, "No path specified");
+	return chdir(dir);
 }
 
 /**
@@ -28,9 +32,7 @@ static bool shell_cd(word_t *dir)
  */
 static int shell_exit(void)
 {
-	/* TODO: Execute exit/quit. */
-
-	return 0; /* TODO: Replace with actual exit code. */
+	return SHELL_EXIT;
 }
 
 /**
@@ -40,8 +42,13 @@ static int shell_exit(void)
 static int parse_simple(simple_command_t *s, int level, command_t *father)
 {
 	/* TODO: Sanity checks. */
+	DIE(s == NULL, "No command found");
+
 
 	/* TODO: If builtin command, execute the command. */
+	if (strcmp(s->verb->string, "exit") == 0) {
+		return shell_exit();
+	}
 
 	/* TODO: If variable assignment, execute the assignment and return
 	 * the exit status.
@@ -54,8 +61,24 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	 *   2. Wait for child
 	 *   3. Return exit status
 	 */
+	pid_t pid = fork();
+	DIE(pid == -1, "fork() error");
 
-	return 0; /* TODO: Replace with actual exit status. */
+	int status;
+
+	if (pid == 0) {
+		int size = 0;
+		char **args = get_argv(s, &size);
+		execvp(args[0], args);
+	} else {
+		pid_t wait_ret = waitpid(pid, &status, 0);
+    	DIE(wait_ret < 0, "Fail waitpid");
+	}
+
+	if (WIFEXITED(status)) {
+		return WIFEXITED(status);
+	}
+	return 0;
 }
 
 /**
@@ -86,11 +109,10 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 int parse_command(command_t *c, int level, command_t *father)
 {
 	/* TODO: sanity checks */
+	DIE(c == NULL, "No command found");
 
 	if (c->op == OP_NONE) {
-		/* TODO: Execute a simple command. */
-
-		return 0; /* TODO: Replace with actual exit code of command. */
+		return parse_simple(c->scmd, level, father);
 	}
 
 	switch (c->op) {
