@@ -47,7 +47,11 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	DIE(s == NULL || s->up == NULL, "Invalid command format");
 
 	/* TODO: If builtin command, execute the command. */
-	if (strcmp(s->verb->string, "cd") == 0) {
+	if (strcmp(s->verb->string, "true") == 0) {
+		return 0;
+	} else if (strcmp(s->verb->string, "false") == 0) {
+		return 1;
+	} else if (strcmp(s->verb->string, "cd") == 0) {
 		if (s->out) {
             int fout = open(s->out->string, O_CREAT | O_WRONLY | O_TRUNC, 0777);
             close(fout);
@@ -61,6 +65,15 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	/* TODO: If variable assignment, execute the assignment and return
 	 * the exit status.
 	 */
+
+	int size = 0;
+	char **args = get_argv(s, &size);
+
+	if (s->verb->next_part) {
+		char *name = s->verb->string;
+		char *value = strchr(args[0], '=') + 1;
+		return setenv(name, value, 1);
+	}
 
 	/* TODO: If external command:
 	 *   1. Fork new process
@@ -76,8 +89,6 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
 	if (pid == 0) {
 		int fin, fout, ferr;
-		int size = 0;
-		char **args = get_argv(s, &size);
 
 		if (s->in) {
 			fin = open(s->in->string, O_RDONLY, 0777);
@@ -98,16 +109,16 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 				close(ferr);
 			}
 		}
-
 		int ret = execvp(args[0], args);
 		DIE(ret == -1, "execvp() error");
 	} else {
 		pid_t wait_ret = waitpid(pid, &status, 0);
-    	DIE(wait_ret < 0, "Fail waitpid");
-	}
 
-	if (WIFEXITED(status)) {
-		return WIFEXITED(status);
+    	DIE(wait_ret == -1, "Child command execution failed");
+
+		if (WIFEXITED(status)) {
+			return WEXITSTATUS(status);
+		}
 	}
 	return 0;
 }
@@ -146,9 +157,12 @@ int parse_command(command_t *c, int level, command_t *father)
 		return parse_simple(c->scmd, level, father);
 	}
 
+	int ret1, ret2;
+
 	switch (c->op) {
 	case OP_SEQUENTIAL:
-		/* TODO: Execute the commands one after the other. */
+		ret1 = parse_command(c->cmd1, level, father);
+		ret2 = parse_command(c->cmd2, level, father);
 		break;
 
 	case OP_PARALLEL:
@@ -156,15 +170,20 @@ int parse_command(command_t *c, int level, command_t *father)
 		break;
 
 	case OP_CONDITIONAL_NZERO:
-		/* TODO: Execute the second command only if the first one
-		 * returns non zero.
-		 */
+		ret1 = parse_command(c->cmd1, level, father);
+		if (ret1 != 0) {
+			ret2 = parse_command(c->cmd2, level + 1, father);
+		}
+		return ret2;
 		break;
 
 	case OP_CONDITIONAL_ZERO:
-		/* TODO: Execute the second command only if the first one
-		 * returns zero.
-		 */
+		ret1 = parse_command(c->cmd1, level, father);
+
+		if (ret1 == 0) {
+			ret2 = parse_command(c->cmd2, level + 1, father);
+		}
+		return ret2;
 		break;
 
 	case OP_PIPE:
