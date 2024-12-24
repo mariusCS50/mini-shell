@@ -101,9 +101,6 @@ typedef struct word_t {
  * (up != NULL)
  */
 
-#define IO_REGULAR	0x00
-#define IO_APPEND	0x01
-
 typedef struct {
 	word_t *verb;
 	word_t *params;

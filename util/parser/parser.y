@@ -25,6 +25,7 @@ using namespace std;
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <fcntl.h>
 
 #endif
 
@@ -373,125 +374,125 @@ redirect:
 	}
 
 	| redirect REDIRECT_OE word {
-		$1.red_o = add_word_to_list($3, $1.red_o, IO_REGULAR);
-		$1.red_e = add_word_to_list($3, $1.red_e, IO_REGULAR);
+		$1.red_o = add_word_to_list($3, $1.red_o, O_TRUNC);
+		$1.red_e = add_word_to_list($3, $1.red_e, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_E word {
-		$1.red_e = add_word_to_list($3, $1.red_e, IO_REGULAR);
+		$1.red_e = add_word_to_list($3, $1.red_e, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_O word {
-		$1.red_o = add_word_to_list($3, $1.red_o, IO_REGULAR);
+		$1.red_o = add_word_to_list($3, $1.red_o, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_E word {
-		$1.red_e = add_word_to_list($3, $1.red_e, IO_APPEND);
+		$1.red_e = add_word_to_list($3, $1.red_e, O_APPEND);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_O word {
-		$1.red_o = add_word_to_list($3, $1.red_o, IO_APPEND);
+		$1.red_o = add_word_to_list($3, $1.red_o, O_APPEND);
 		$$ = $1;
 	}
 
 	| redirect INDIRECT word {
-		$1.red_i = add_word_to_list($3, $1.red_i, IO_REGULAR);
+		$1.red_i = add_word_to_list($3, $1.red_i, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_OE word BLANK {
-		$1.red_o = add_word_to_list($3, $1.red_o, IO_REGULAR);
-		$1.red_e = add_word_to_list($3, $1.red_e, IO_REGULAR);
+		$1.red_o = add_word_to_list($3, $1.red_o, O_TRUNC);
+		$1.red_e = add_word_to_list($3, $1.red_e, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_E word BLANK {
-		$1.red_e = add_word_to_list($3, $1.red_e, IO_REGULAR);
+		$1.red_e = add_word_to_list($3, $1.red_e, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_O word BLANK {
-		$1.red_o = add_word_to_list($3, $1.red_o, IO_REGULAR);
+		$1.red_o = add_word_to_list($3, $1.red_o, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_E word BLANK {
-		$1.red_e = add_word_to_list($3, $1.red_e, IO_APPEND);
+		$1.red_e = add_word_to_list($3, $1.red_e, O_APPEND);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_O word BLANK {
-		$1.red_o = add_word_to_list($3, $1.red_o, IO_APPEND);
+		$1.red_o = add_word_to_list($3, $1.red_o, O_APPEND);
 		$$ = $1;
 	}
 
 	| redirect INDIRECT word BLANK {
-		$1.red_i = add_word_to_list($3, $1.red_i, IO_REGULAR);
+		$1.red_i = add_word_to_list($3, $1.red_i, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_OE BLANK word {
-		$1.red_o = add_word_to_list($4, $1.red_o, IO_REGULAR);
-		$1.red_e = add_word_to_list($4, $1.red_e, IO_REGULAR);
+		$1.red_o = add_word_to_list($4, $1.red_o, O_TRUNC);
+		$1.red_e = add_word_to_list($4, $1.red_e, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_E BLANK word {
-		$1.red_e = add_word_to_list($4, $1.red_e, IO_REGULAR);
+		$1.red_e = add_word_to_list($4, $1.red_e, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_O BLANK word {
-		$1.red_o = add_word_to_list($4, $1.red_o, IO_REGULAR);
+		$1.red_o = add_word_to_list($4, $1.red_o, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_E BLANK word {
-		$1.red_e = add_word_to_list($4, $1.red_e, IO_APPEND);
+		$1.red_e = add_word_to_list($4, $1.red_e, O_APPEND);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_O BLANK word {
-		$1.red_o = add_word_to_list($4, $1.red_o, IO_APPEND);
+		$1.red_o = add_word_to_list($4, $1.red_o, O_APPEND);
 		$$ = $1;
 	}
 
 	| redirect INDIRECT BLANK word {
-		$1.red_i = add_word_to_list($4, $1.red_i, IO_REGULAR);
+		$1.red_i = add_word_to_list($4, $1.red_i, O_TRUNC);
 		$$ = $1;
 	}
 	| redirect REDIRECT_OE BLANK word BLANK {
-		$1.red_o = add_word_to_list($4, $1.red_o, IO_REGULAR);
-		$1.red_e = add_word_to_list($4, $1.red_e, IO_REGULAR);
+		$1.red_o = add_word_to_list($4, $1.red_o, O_TRUNC);
+		$1.red_e = add_word_to_list($4, $1.red_e, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_E BLANK word BLANK {
-		$1.red_e = add_word_to_list($4, $1.red_e, IO_REGULAR);
+		$1.red_e = add_word_to_list($4, $1.red_e, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_O BLANK word BLANK {
-		$1.red_o = add_word_to_list($4, $1.red_o, IO_REGULAR);
+		$1.red_o = add_word_to_list($4, $1.red_o, O_TRUNC);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_O BLANK word BLANK {
-		$1.red_o = add_word_to_list($4, $1.red_o, IO_APPEND);
+		$1.red_o = add_word_to_list($4, $1.red_o, O_APPEND);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_E BLANK word BLANK {
-		$1.red_e = add_word_to_list($4, $1.red_e, IO_APPEND);
+		$1.red_e = add_word_to_list($4, $1.red_e, O_APPEND);
 		$$ = $1;
 	}
 
 	| redirect INDIRECT BLANK word BLANK {
-		$1.red_i = add_word_to_list($4, $1.red_i, IO_REGULAR);
+		$1.red_i = add_word_to_list($4, $1.red_i, O_TRUNC);
 		$$ = $1;
 	}
 

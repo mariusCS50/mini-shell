@@ -1,4 +1,0 @@
-01) Testing commands without arguments......................failed  [ 0/100]
-02) Testing commands with arguments.........................failed  [ 0/100]
-03) Testing simple redirect operators.......................failed  [ 0/100]
-04) Testing append redirect operators.......................failed  [ 0/100]

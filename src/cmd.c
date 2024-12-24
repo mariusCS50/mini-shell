@@ -23,7 +23,10 @@
  */
 static bool shell_cd(word_t *dir)
 {
-	//return chdir(dir);
+	if (dir && dir->next_word == NULL) {
+		return chdir(dir->string);
+	}
+	return 0;
 }
 
 /**
@@ -43,9 +46,12 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	/* TODO: Sanity checks. */
 	DIE(s == NULL || s->up == NULL, "Invalid command format");
 
-
 	/* TODO: If builtin command, execute the command. */
 	if (strcmp(s->verb->string, "cd") == 0) {
+		if (s->out) {
+            int fout = open(s->out->string, O_CREAT | O_WRONLY | O_TRUNC, 0777);
+            close(fout);
+        }
 		return shell_cd(s->params);
 	} else if (strcmp(s->verb->string, "exit") == 0 ||
 			   strcmp(s->verb->string, "quit") == 0) {
@@ -69,12 +75,32 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	int status;
 
 	if (pid == 0) {
+		int fin, fout, ferr;
 		int size = 0;
 		char **args = get_argv(s, &size);
-		printf("%s - %d\n", s->out->string, s->out->io_flag);
-		printf("%s - %d\n", s->out->next_word->string, s->out->next_word->io_flag);
-		//int ret = execvp(args[0], args);
-		//DIE(ret == -1, "execvp() error");
+
+		if (s->in) {
+			fin = open(s->in->string, O_RDONLY, 0777);
+			dup2(fin, STDIN_FILENO);
+			close(fin);
+		}
+		if (s->out) {
+			fout = open(s->out->string, O_CREAT | O_WRONLY | s->out->io_flag, 0777);
+			dup2(fout, STDOUT_FILENO);
+			close(fout);
+		}
+		if (s->err) {
+			if (s->out && strcmp(s->err->string, s->out->string) == 0) {
+				dup2(STDOUT_FILENO, STDERR_FILENO);
+			} else {
+				ferr = open(s->err->string, O_CREAT | O_WRONLY | s->err->io_flag, 0777);
+				dup2(ferr, STDERR_FILENO);
+				close(ferr);
+			}
+		}
+
+		int ret = execvp(args[0], args);
+		DIE(ret == -1, "execvp() error");
 	} else {
 		pid_t wait_ret = waitpid(pid, &status, 0);
     	DIE(wait_ret < 0, "Fail waitpid");

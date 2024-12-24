@@ -1,0 +1,3 @@
+err2.txt -- err2.txt
+gcc: fatal error: no input files
+compilation terminated.
