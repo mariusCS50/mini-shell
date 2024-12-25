@@ -62,10 +62,6 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 		return shell_exit();
 	}
 
-	/* TODO: If variable assignment, execute the assignment and return
-	 * the exit status.
-	 */
-
 	int size = 0;
 	char **args = get_argv(s, &size);
 
@@ -109,17 +105,16 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 				close(ferr);
 			}
 		}
-		int ret = execvp(args[0], args);
-		DIE(ret == -1, "execvp() error");
-	} else {
-		pid_t wait_ret = waitpid(pid, &status, 0);
-
-    	DIE(wait_ret == -1, "Child command execution failed");
-
-		if (WIFEXITED(status)) {
-			return WEXITSTATUS(status);
-		}
+		execvp(args[0], args);
 	}
+
+	pid_t wait_ret = waitpid(pid, &status, 0);
+	DIE(wait_ret == -1, "Child command execution failed");
+
+	if (WIFEXITED(status)) {
+		return WEXITSTATUS(status);
+	}
+
 	return 0;
 }
 
@@ -140,9 +135,49 @@ static bool run_in_parallel(command_t *cmd1, command_t *cmd2, int level,
 static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 		command_t *father)
 {
-	/* TODO: Redirect the output of cmd1 to the input of cmd2. */
+	int pipe_fd[2];
 
-	return true; /* TODO: Replace with actual exit status. */
+	int ret = pipe(pipe_fd);
+	DIE(ret == -1, "pipe() error");
+
+	int status;
+
+	pid_t pid1 = fork();
+	DIE(pid1 == -1, "fork() error");
+
+	if (pid1 == 0) {
+		dup2(pipe_fd[1], STDOUT_FILENO);
+		close(pipe_fd[0]);
+		close(pipe_fd[1]);
+
+		exit(parse_command(cmd1, level, father));
+	}
+
+	pid_t pid2 = fork();
+	DIE(pid2 == -1, "fork() error");
+
+	if (pid2 == 0) {
+		dup2(pipe_fd[0], STDIN_FILENO);
+		close(pipe_fd[0]);
+		close(pipe_fd[1]);
+
+		exit(parse_command(cmd2, level, father));
+	}
+
+	close(pipe_fd[0]);
+	close(pipe_fd[1]);
+
+	pid_t wait_ret1 = waitpid(pid1, &status, 0);
+	DIE(wait_ret1 == -1, "First child in pipe commands execution failed");
+
+    pid_t wait_ret2 = waitpid(pid2, &status, 0);
+	DIE(wait_ret2 == -1, "Second child in pipe commands execution failed");
+
+	if (WIFEXITED(status)) {
+		return WEXITSTATUS(status);
+	}
+
+	return 0;
 }
 
 /**
@@ -170,27 +205,22 @@ int parse_command(command_t *c, int level, command_t *father)
 		break;
 
 	case OP_CONDITIONAL_NZERO:
-		ret1 = parse_command(c->cmd1, level, father);
+		ret1 = parse_command(c->cmd1, level + 1, father);
 		if (ret1 != 0) {
 			ret2 = parse_command(c->cmd2, level + 1, father);
 		}
 		return ret2;
-		break;
 
 	case OP_CONDITIONAL_ZERO:
-		ret1 = parse_command(c->cmd1, level, father);
+		ret1 = parse_command(c->cmd1, level + 1, father);
 
 		if (ret1 == 0) {
 			ret2 = parse_command(c->cmd2, level + 1, father);
 		}
 		return ret2;
-		break;
 
 	case OP_PIPE:
-		/* TODO: Redirect the output of the first command to the
-		 * input of the second.
-		 */
-		break;
+		return run_on_pipe(c->cmd1, c->cmd2, level, father);
 
 	default:
 		return SHELL_EXIT;
