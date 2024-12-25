@@ -23,9 +23,9 @@
  */
 static bool shell_cd(word_t *dir)
 {
-	if (dir && dir->next_word == NULL) {
+	if (dir && dir->next_word == NULL)
 		return chdir(dir->string);
-	}
+
 	return 0;
 }
 
@@ -37,30 +37,48 @@ static int shell_exit(void)
 	return SHELL_EXIT;
 }
 
+char *concatenate_parts(word_t *s)
+{
+	word_t *has_next_part = s->next_part;
+
+	while (has_next_part) {
+		if (has_next_part->expand) {
+			char *expanded_env = getenv(has_next_part->string);
+
+			if (expanded_env)
+				strcat(s->string, getenv(has_next_part->string));
+		} else {
+			strcat(s->string, has_next_part->string);
+		}
+		has_next_part = has_next_part->next_part;
+	}
+	return s->string;
+}
+
 /**
  * Parse a simple command (internal, environment variable assignment,
  * external command).
  */
 static int parse_simple(simple_command_t *s, int level, command_t *father)
 {
-	/* TODO: Sanity checks. */
 	DIE(s == NULL || s->up == NULL, "Invalid command format");
 
-	/* TODO: If builtin command, execute the command. */
-	if (strcmp(s->verb->string, "true") == 0) {
-		return 0;
-	} else if (strcmp(s->verb->string, "false") == 0) {
-		return 1;
-	} else if (strcmp(s->verb->string, "cd") == 0) {
+	if (strcmp(s->verb->string, "cd") == 0) {
 		if (s->out) {
-            int fout = open(s->out->string, O_CREAT | O_WRONLY | O_TRUNC, 0777);
-            close(fout);
-        }
+			int fout = open(s->out->string, O_CREAT, 0744);
+
+			close(fout);
+		}
+		if (s->err) {
+			int ferr = open(s->out->string, O_CREAT, 0744);
+
+			close(ferr);
+		}
 		return shell_cd(s->params);
-	} else if (strcmp(s->verb->string, "exit") == 0 ||
-			   strcmp(s->verb->string, "quit") == 0) {
-		return shell_exit();
 	}
+
+	if (strcmp(s->verb->string, "exit") == 0 || strcmp(s->verb->string, "quit") == 0)
+		return shell_exit();
 
 	int size = 0;
 	char **args = get_argv(s, &size);
@@ -68,55 +86,26 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 	if (s->verb->next_part) {
 		char *name = s->verb->string;
 		char *value = strchr(args[0], '=') + 1;
+
 		return setenv(name, value, 1);
 	}
 
-	/* TODO: If external command:
-	 *   1. Fork new process
-	 *     2c. Perform redirections in child
-	 *     3c. Load executable in child
-	 *   2. Wait for child
-	 *   3. Return exit status
-	 */
-	pid_t pid = fork();
-	DIE(pid == -1, "fork() error");
-
 	int status;
+
+	pid_t pid = fork();
+
+	DIE(pid == -1, "fork() error");
 
 	if (pid == 0) {
 		int fin, fout, ferr;
 
 		if (s->in) {
-			word_t *has_next_part = s->in->next_part;
-			while (has_next_part) {
-				if (has_next_part->expand) {
-					char *env = getenv(has_next_part->string);
-					if (env) {
-						strcat(s->in->string, env);
-					}
-				} else {
-					strcat(s->in->string, has_next_part->string);
-				}
-				has_next_part = has_next_part->next_part;
-			}
-			fin = open(s->in->string, O_RDONLY, 0777);
+			fin = open(concatenate_parts(s->in), O_RDONLY, 0744);
 			dup2(fin, STDIN_FILENO);
 			close(fin);
 		}
 		if (s->out) {
-			word_t *has_next_part = s->out->next_part;
-			while (has_next_part) {
-				if (has_next_part->expand) {
-					char *env = getenv(has_next_part->string);
-					if (env) {
-						strcat(s->out->string, env);
-					}
-				} else {
-					strcat(s->out->string, has_next_part->string);
-				}
-				has_next_part = has_next_part->next_part;
-			}
-			fout = open(s->out->string, O_CREAT | O_WRONLY | s->out->io_flag, 0777);
+			fout = open(concatenate_parts(s->out), O_CREAT | O_WRONLY | s->out->io_flag, 0744);
 			dup2(fout, STDOUT_FILENO);
 			close(fout);
 		}
@@ -124,19 +113,7 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 			if (s->out && strcmp(s->err->string, s->out->string) == 0) {
 				dup2(STDOUT_FILENO, STDERR_FILENO);
 			} else {
-				word_t *has_next_part = s->err->next_part;
-				while (has_next_part) {
-					if (has_next_part->expand) {
-						char *env = getenv(has_next_part->string);
-						if (env) {
-							strcat(s->err->string, env);
-						}
-					} else {
-						strcat(s->err->string, has_next_part->string);
-					}
-					has_next_part = has_next_part->next_part;
-				}
-				ferr = open(s->err->string, O_CREAT | O_WRONLY | s->err->io_flag, 0777);
+				ferr = open(concatenate_parts(s->err), O_CREAT | O_WRONLY | s->err->io_flag, 0744);
 				dup2(ferr, STDERR_FILENO);
 				close(ferr);
 			}
@@ -149,10 +126,8 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 
 	pid_t wait_ret = waitpid(pid, &status, 0);
 
-
-	if (WIFEXITED(status)) {
+	if (WIFEXITED(status))
 		return WEXITSTATUS(status);
-	}
 
 	return 0;
 }
@@ -166,25 +141,25 @@ static bool run_in_parallel(command_t *cmd1, command_t *cmd2, int level,
 	int status;
 
 	pid_t pid1 = fork();
+
 	DIE(pid1 == -1, "fork() error");
 
-	if (pid1 == 0) {
+	if (pid1 == 0)
 		exit(parse_command(cmd1, level, father));
-	}
 
 	pid_t pid2 = fork();
+
 	DIE(pid2 == -1, "fork() error");
 
-	if (pid2 == 0) {
+	if (pid2 == 0)
 		exit(parse_command(cmd2, level, father));
-	}
+
 
 	pid_t wait_ret1 = waitpid(pid1, &status, 0);
-    pid_t wait_ret2 = waitpid(pid2, &status, 0);
+	pid_t wait_ret2 = waitpid(pid2, &status, 0);
 
-	if (WIFEXITED(status)) {
+	if (WIFEXITED(status))
 		return WEXITSTATUS(status);
-	}
 
 	return 0;
 }
@@ -196,13 +171,14 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 		command_t *father)
 {
 	int pipe_fd[2];
-
 	int ret = pipe(pipe_fd);
+
 	DIE(ret == -1, "pipe() error");
 
 	int status;
 
 	pid_t pid1 = fork();
+
 	DIE(pid1 == -1, "fork() error");
 
 	if (pid1 == 0) {
@@ -214,6 +190,7 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 	}
 
 	pid_t pid2 = fork();
+
 	DIE(pid2 == -1, "fork() error");
 
 	if (pid2 == 0) {
@@ -228,11 +205,10 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 	close(pipe_fd[1]);
 
 	pid_t wait_ret1 = waitpid(pid1, &status, 0);
-    pid_t wait_ret2 = waitpid(pid2, &status, 0);
+	pid_t wait_ret2 = waitpid(pid2, &status, 0);
 
-	if (WIFEXITED(status)) {
+	if (WIFEXITED(status))
 		return WEXITSTATUS(status);
-	}
 
 	return 0;
 }
@@ -242,12 +218,10 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
  */
 int parse_command(command_t *c, int level, command_t *father)
 {
-	/* TODO: sanity checks */
 	DIE(c == NULL, "No command found");
 
-	if (c->op == OP_NONE) {
+	if (c->op == OP_NONE)
 		return parse_simple(c->scmd, level, father);
-	}
 
 	int ret1, ret2;
 
@@ -262,17 +236,18 @@ int parse_command(command_t *c, int level, command_t *father)
 
 	case OP_CONDITIONAL_NZERO:
 		ret1 = parse_command(c->cmd1, level + 1, father);
-		if (ret1 != 0) {
+
+		if (ret1 != 0)
 			ret2 = parse_command(c->cmd2, level + 1, father);
-		}
+
 		return ret2;
 
 	case OP_CONDITIONAL_ZERO:
 		ret1 = parse_command(c->cmd1, level + 1, father);
 
-		if (ret1 == 0) {
+		if (ret1 == 0)
 			ret2 = parse_command(c->cmd2, level + 1, father);
-		}
+
 		return ret2;
 
 	case OP_PIPE:
@@ -282,5 +257,5 @@ int parse_command(command_t *c, int level, command_t *father)
 		return SHELL_EXIT;
 	}
 
-	return 0; /* TODO: Replace with actual exit code of command. */
+	return 0;
 }
