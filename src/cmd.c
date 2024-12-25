@@ -87,11 +87,35 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 		int fin, fout, ferr;
 
 		if (s->in) {
+			word_t *has_next_part = s->in->next_part;
+			while (has_next_part) {
+				if (has_next_part->expand) {
+					char *env = getenv(has_next_part->string);
+					if (env) {
+						strcat(s->in->string, env);
+					}
+				} else {
+					strcat(s->in->string, has_next_part->string);
+				}
+				has_next_part = has_next_part->next_part;
+			}
 			fin = open(s->in->string, O_RDONLY, 0777);
 			dup2(fin, STDIN_FILENO);
 			close(fin);
 		}
 		if (s->out) {
+			word_t *has_next_part = s->out->next_part;
+			while (has_next_part) {
+				if (has_next_part->expand) {
+					char *env = getenv(has_next_part->string);
+					if (env) {
+						strcat(s->out->string, env);
+					}
+				} else {
+					strcat(s->out->string, has_next_part->string);
+				}
+				has_next_part = has_next_part->next_part;
+			}
 			fout = open(s->out->string, O_CREAT | O_WRONLY | s->out->io_flag, 0777);
 			dup2(fout, STDOUT_FILENO);
 			close(fout);
@@ -100,16 +124,31 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 			if (s->out && strcmp(s->err->string, s->out->string) == 0) {
 				dup2(STDOUT_FILENO, STDERR_FILENO);
 			} else {
+				word_t *has_next_part = s->err->next_part;
+				while (has_next_part) {
+					if (has_next_part->expand) {
+						char *env = getenv(has_next_part->string);
+						if (env) {
+							strcat(s->err->string, env);
+						}
+					} else {
+						strcat(s->err->string, has_next_part->string);
+					}
+					has_next_part = has_next_part->next_part;
+				}
 				ferr = open(s->err->string, O_CREAT | O_WRONLY | s->err->io_flag, 0777);
 				dup2(ferr, STDERR_FILENO);
 				close(ferr);
 			}
 		}
 		execvp(args[0], args);
+
+		printf("Execution failed for '%s'\n", s->verb->string);
+		exit(EXIT_FAILURE);
 	}
 
 	pid_t wait_ret = waitpid(pid, &status, 0);
-	DIE(wait_ret == -1, "Child command execution failed");
+
 
 	if (WIFEXITED(status)) {
 		return WEXITSTATUS(status);
@@ -124,9 +163,30 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 static bool run_in_parallel(command_t *cmd1, command_t *cmd2, int level,
 		command_t *father)
 {
-	/* TODO: Execute cmd1 and cmd2 simultaneously. */
+	int status;
 
-	return true; /* TODO: Replace with actual exit status. */
+	pid_t pid1 = fork();
+	DIE(pid1 == -1, "fork() error");
+
+	if (pid1 == 0) {
+		exit(parse_command(cmd1, level, father));
+	}
+
+	pid_t pid2 = fork();
+	DIE(pid2 == -1, "fork() error");
+
+	if (pid2 == 0) {
+		exit(parse_command(cmd2, level, father));
+	}
+
+	pid_t wait_ret1 = waitpid(pid1, &status, 0);
+    pid_t wait_ret2 = waitpid(pid2, &status, 0);
+
+	if (WIFEXITED(status)) {
+		return WEXITSTATUS(status);
+	}
+
+	return 0;
 }
 
 /**
@@ -168,10 +228,7 @@ static bool run_on_pipe(command_t *cmd1, command_t *cmd2, int level,
 	close(pipe_fd[1]);
 
 	pid_t wait_ret1 = waitpid(pid1, &status, 0);
-	DIE(wait_ret1 == -1, "First child in pipe commands execution failed");
-
     pid_t wait_ret2 = waitpid(pid2, &status, 0);
-	DIE(wait_ret2 == -1, "Second child in pipe commands execution failed");
 
 	if (WIFEXITED(status)) {
 		return WEXITSTATUS(status);
@@ -201,8 +258,7 @@ int parse_command(command_t *c, int level, command_t *father)
 		break;
 
 	case OP_PARALLEL:
-		/* TODO: Execute the commands simultaneously. */
-		break;
+		return run_in_parallel(c->cmd1, c->cmd2, level + 1, father);
 
 	case OP_CONDITIONAL_NZERO:
 		ret1 = parse_command(c->cmd1, level + 1, father);
@@ -220,7 +276,7 @@ int parse_command(command_t *c, int level, command_t *father)
 		return ret2;
 
 	case OP_PIPE:
-		return run_on_pipe(c->cmd1, c->cmd2, level, father);
+		return run_on_pipe(c->cmd1, c->cmd2, level + 1, father);
 
 	default:
 		return SHELL_EXIT;
