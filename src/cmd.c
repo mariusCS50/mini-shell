@@ -105,7 +105,9 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 			close(fin);
 		}
 		if (s->out) {
-			fout = open(concatenate_parts(s->out), O_CREAT | O_WRONLY | s->out->io_flag, 0744);
+			int flag = (s->io_flags & IO_OUT_APPEND ? O_APPEND : O_TRUNC);
+
+			fout = open(concatenate_parts(s->out), O_CREAT | O_WRONLY | flag, 0744);
 			dup2(fout, STDOUT_FILENO);
 			close(fout);
 		}
@@ -113,7 +115,9 @@ static int parse_simple(simple_command_t *s, int level, command_t *father)
 			if (s->out && strcmp(s->err->string, s->out->string) == 0) {
 				dup2(STDOUT_FILENO, STDERR_FILENO);
 			} else {
-				ferr = open(concatenate_parts(s->err), O_CREAT | O_WRONLY | s->err->io_flag, 0744);
+				int flag = (s->io_flags & IO_ERR_APPEND ? O_APPEND : O_TRUNC);
+
+				ferr = open(concatenate_parts(s->err), O_CREAT | O_WRONLY | flag, 0744);
 				dup2(ferr, STDERR_FILENO);
 				close(ferr);
 			}

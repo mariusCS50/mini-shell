@@ -79,6 +79,22 @@ static void displaySimple(simple_command_t * s, int level, command_t * father)
 		std::cout << std::setw(2 * indent * level + indent) << "" << ")" << std::endl;
 	}
 
+	if (s->out != NULL) {
+		std::cout << std::setw(2 * indent * level + indent) << "" << "out (" << std::endl;
+		displayList(s->out, level + 1);
+		if (s->io_flags & IO_OUT_APPEND)
+			std::cout << std::setw(2 * indent * (level+1)) << "" << "APPEND" << std::endl;
+		std::cout << std::setw(2 * indent * level + indent) << "" << ")" << std::endl;
+	}
+
+	if (s->err != NULL) {
+		std::cout << std::setw(2 * indent * level + indent) << "" << "err (" << std::endl;
+		displayList(s->err, level + 1);
+		if (s->io_flags & IO_ERR_APPEND)
+			std::cout << std::setw(2 * indent * (level+1)) << "" << "APPEND" << std::endl;
+		std::cout << std::setw(2 * indent * level + indent) << "" << ")" << std::endl;
+	}
+
 	std::cout << std::setw(2 * indent * level) << "" << ")" << std::endl;
 }
 

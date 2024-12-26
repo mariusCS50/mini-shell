@@ -25,7 +25,6 @@ using namespace std;
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#include <fcntl.h>
 
 #endif
 
@@ -102,6 +101,7 @@ static simple_command_t * bind_parts(word_t * exe_name, word_t * params, redirec
 	s->in = red.red_i;
 	s->out = red.red_o;
 	s->err = red.red_e;
+	s->io_flags = red.red_flags;
 	s->up = NULL;
 	s->aux = NULL;
 	return s;
@@ -165,7 +165,6 @@ static word_t * new_word(const char * str, bool expand)
 	w->expand = expand;
 	w->next_part = NULL;
 	w->next_word = NULL;
-	w->io_flag = 0;
 
 	return w;
 }
@@ -196,12 +195,10 @@ static word_t * add_part_to_word(word_t * w, word_t * lst)
 }
 
 
-static word_t * add_word_to_list(word_t * w, word_t * lst, int io_flag)
+static word_t * add_word_to_list(word_t * w, word_t * lst)
 {
 	word_t * crt = lst;
 	assert(w != NULL);
-
-	w->io_flag = io_flag;
 
 	if (crt == NULL) {
 		assert(w->next_word == NULL);
@@ -356,7 +353,7 @@ exe_name:
 params:
 
 	  params BLANK word {
-		$$ = add_word_to_list($3, $1, 0);
+		$$ = add_word_to_list($3, $1);
 		assert($$ == $1);
 	}
 
@@ -371,128 +368,137 @@ redirect:
 		$$.red_o = NULL;
 		$$.red_i = NULL;
 		$$.red_e = NULL;
+		$$.red_flags = IO_REGULAR;
 	}
 
 	| redirect REDIRECT_OE word {
-		$1.red_o = add_word_to_list($3, $1.red_o, O_TRUNC);
-		$1.red_e = add_word_to_list($3, $1.red_e, O_TRUNC);
+		$1.red_o = add_word_to_list($3, $1.red_o);
+		$1.red_e = add_word_to_list($3, $1.red_e);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_E word {
-		$1.red_e = add_word_to_list($3, $1.red_e, O_TRUNC);
+		$1.red_e = add_word_to_list($3, $1.red_e);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_O word {
-		$1.red_o = add_word_to_list($3, $1.red_o, O_TRUNC);
+		$1.red_o = add_word_to_list($3, $1.red_o);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_E word {
-		$1.red_e = add_word_to_list($3, $1.red_e, O_APPEND);
+		$1.red_e = add_word_to_list($3, $1.red_e);
+		$1.red_flags |= IO_ERR_APPEND;
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_O word {
-		$1.red_o = add_word_to_list($3, $1.red_o, O_APPEND);
+		$1.red_o = add_word_to_list($3, $1.red_o);
+		$1.red_flags |= IO_OUT_APPEND;
 		$$ = $1;
 	}
 
 	| redirect INDIRECT word {
-		$1.red_i = add_word_to_list($3, $1.red_i, O_TRUNC);
+		$1.red_i = add_word_to_list($3, $1.red_i);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_OE word BLANK {
-		$1.red_o = add_word_to_list($3, $1.red_o, O_TRUNC);
-		$1.red_e = add_word_to_list($3, $1.red_e, O_TRUNC);
+		$1.red_o = add_word_to_list($3, $1.red_o);
+		$1.red_e = add_word_to_list($3, $1.red_e);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_E word BLANK {
-		$1.red_e = add_word_to_list($3, $1.red_e, O_TRUNC);
+		$1.red_e = add_word_to_list($3, $1.red_e);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_O word BLANK {
-		$1.red_o = add_word_to_list($3, $1.red_o, O_TRUNC);
+		$1.red_o = add_word_to_list($3, $1.red_o);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_E word BLANK {
-		$1.red_e = add_word_to_list($3, $1.red_e, O_APPEND);
+		$1.red_e = add_word_to_list($3, $1.red_e);
+		$1.red_flags |= IO_ERR_APPEND;
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_O word BLANK {
-		$1.red_o = add_word_to_list($3, $1.red_o, O_APPEND);
+		$1.red_o = add_word_to_list($3, $1.red_o);
+		$1.red_flags |= IO_OUT_APPEND;
 		$$ = $1;
 	}
 
 	| redirect INDIRECT word BLANK {
-		$1.red_i = add_word_to_list($3, $1.red_i, O_TRUNC);
+		$1.red_i = add_word_to_list($3, $1.red_i);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_OE BLANK word {
-		$1.red_o = add_word_to_list($4, $1.red_o, O_TRUNC);
-		$1.red_e = add_word_to_list($4, $1.red_e, O_TRUNC);
+		$1.red_o = add_word_to_list($4, $1.red_o);
+		$1.red_e = add_word_to_list($4, $1.red_e);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_E BLANK word {
-		$1.red_e = add_word_to_list($4, $1.red_e, O_TRUNC);
+		$1.red_e = add_word_to_list($4, $1.red_e);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_O BLANK word {
-		$1.red_o = add_word_to_list($4, $1.red_o, O_TRUNC);
+		$1.red_o = add_word_to_list($4, $1.red_o);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_E BLANK word {
-		$1.red_e = add_word_to_list($4, $1.red_e, O_APPEND);
+		$1.red_e = add_word_to_list($4, $1.red_e);
+		$1.red_flags |= IO_ERR_APPEND;
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_O BLANK word {
-		$1.red_o = add_word_to_list($4, $1.red_o, O_APPEND);
+		$1.red_o = add_word_to_list($4, $1.red_o);
+		$1.red_flags |= IO_OUT_APPEND;
 		$$ = $1;
 	}
 
 	| redirect INDIRECT BLANK word {
-		$1.red_i = add_word_to_list($4, $1.red_i, O_TRUNC);
+		$1.red_i = add_word_to_list($4, $1.red_i);
 		$$ = $1;
 	}
 	| redirect REDIRECT_OE BLANK word BLANK {
-		$1.red_o = add_word_to_list($4, $1.red_o, O_TRUNC);
-		$1.red_e = add_word_to_list($4, $1.red_e, O_TRUNC);
+		$1.red_o = add_word_to_list($4, $1.red_o);
+		$1.red_e = add_word_to_list($4, $1.red_e);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_E BLANK word BLANK {
-		$1.red_e = add_word_to_list($4, $1.red_e, O_TRUNC);
+		$1.red_e = add_word_to_list($4, $1.red_e);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_O BLANK word BLANK {
-		$1.red_o = add_word_to_list($4, $1.red_o, O_TRUNC);
+		$1.red_o = add_word_to_list($4, $1.red_o);
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_O BLANK word BLANK {
-		$1.red_o = add_word_to_list($4, $1.red_o, O_APPEND);
+		$1.red_o = add_word_to_list($4, $1.red_o);
+		$1.red_flags |= IO_OUT_APPEND;
 		$$ = $1;
 	}
 
 	| redirect REDIRECT_APPEND_E BLANK word BLANK {
-		$1.red_e = add_word_to_list($4, $1.red_e, O_APPEND);
+		$1.red_e = add_word_to_list($4, $1.red_e);
+		$1.red_flags |= IO_ERR_APPEND;
 		$$ = $1;
 	}
 
 	| redirect INDIRECT BLANK word BLANK {
-		$1.red_i = add_word_to_list($4, $1.red_i, O_TRUNC);
+		$1.red_i = add_word_to_list($4, $1.red_i);
 		$$ = $1;
 	}
 

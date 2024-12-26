@@ -67,7 +67,6 @@ typedef struct word_t {
 	bool expand;
 	struct word_t *next_part;
 	struct word_t *next_word;
-	int io_flag;
 } word_t;
 
 
@@ -101,12 +100,17 @@ typedef struct word_t {
  * (up != NULL)
  */
 
+#define IO_REGULAR	0x00
+#define IO_OUT_APPEND	0x01
+#define IO_ERR_APPEND	0x02
+
 typedef struct {
 	word_t *verb;
 	word_t *params;
 	word_t *in;
 	word_t *out;
 	word_t *err;
+	int io_flags;
 	struct command_t *up;
 	void *aux;
 } simple_command_t;
